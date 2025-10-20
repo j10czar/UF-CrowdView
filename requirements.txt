@@ -24,6 +24,8 @@ envyaml==1.10.211231
 filelock==3.19.1
 Flask==2.3.3
 Flask-Bcrypt==1.0.1
+flask-cors==6.0.1
+flask-mongoengine==1.0.0
 Flask-PyMongo==3.0.1
 Flask-WTF==1.2.2
 fsspec==2025.9.0
@@ -98,5 +100,6 @@ virtualenv==20.34.0
 Werkzeug==3.1.3
 wheel==0.45.1
 WTForms==3.2.1
+-e git+https://github.com/ryanping/xorq.git@ae21b2c43ed0553df38b3f81430488d9dc19316d#egg=xorq
 xorq-datafusion==0.2.4
 zipp==3.23.0

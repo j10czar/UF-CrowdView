@@ -1,10 +1,11 @@
-from mongoengine import Document, StringField, DateTimeField, IntField
+from mongoengine import Document, StringField, DateTimeField, IntField, BooleanField
 
 
 class User(Document):
     username = StringField(required=True, unique=True, max_length=200)
     password_hash = StringField(required=True)
     email = StringField(required=True, unique=True)
+    is_admin = BooleanField(default=False)
 
 
 class Report(Document):
