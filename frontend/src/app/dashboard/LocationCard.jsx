@@ -1,9 +1,23 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import LocationGraph from "./LocationGraph";
 
+const HOURS_IN_DAY = 24;
 const FALLBACK_BUSYNESS = 5;
+const DUMMY_HOURLY_TEMPLATE = [
+  3, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 4, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4, 4,
+];
+
+function generateFallbackSeries(baseScore = FALLBACK_BUSYNESS) {
+  const delta = (baseScore ?? FALLBACK_BUSYNESS) - FALLBACK_BUSYNESS;
+
+  return DUMMY_HOURLY_TEMPLATE.map((value) => {
+    const adjusted = Math.round(value + delta);
+    return Math.min(10, Math.max(1, adjusted));
+  });
+}
 
 export default function LocationCard({
   locationId,
@@ -11,10 +25,25 @@ export default function LocationCard({
   imageSrc,
   initialBusyness = null,
 }) {
-  const [busynessScore, setBusynessScore] = useState(initialBusyness);
+  const fallbackSeries = useMemo(
+    () => generateFallbackSeries(initialBusyness ?? FALLBACK_BUSYNESS),
+    [initialBusyness],
+  );
+
+  const fallbackCurrentHourIndex = Math.max(6, fallbackSeries.length - 7);
+
+  const [hourlyBusyness, setHourlyBusyness] = useState(fallbackSeries);
+  const [currentHourIndex, setCurrentHourIndex] = useState(
+    fallbackCurrentHourIndex,
+  );
 
   useEffect(() => {
-    if (busynessScore !== null || !locationId) {
+    setHourlyBusyness(fallbackSeries);
+    setCurrentHourIndex(fallbackCurrentHourIndex);
+  }, [fallbackCurrentHourIndex, fallbackSeries, locationId]);
+
+  useEffect(() => {
+    if (!locationId) {
       return;
     }
 
@@ -24,17 +53,20 @@ export default function LocationCard({
       try {
         // TODO: replace with real API call once endpoint is ready.
         // const response = await fetch(`/api/locations/${locationId}/busyness`);
-        // const { busyness } = await response.json();
-        const busyness = FALLBACK_BUSYNESS;
+        // const { hourlyBusyness: series } = await response.json();
+        const series = fallbackSeries;
+        const resolvedCurrentHourIndex = Math.max(6, series.length - 7);
 
         if (isMounted) {
-          setBusynessScore(busyness);
+          setHourlyBusyness(series);
+          setCurrentHourIndex(resolvedCurrentHourIndex);
         }
       } catch (error) {
         if (isMounted) {
-          setBusynessScore(null);
+          setHourlyBusyness(Array(HOURS_IN_DAY).fill(-1));
+          setCurrentHourIndex(null);
         }
-        console.error("Failed to load busyness score", error);
+        console.error("Failed to load busyness data", error);
       }
     }
 
@@ -43,10 +75,27 @@ export default function LocationCard({
     return () => {
       isMounted = false;
     };
-  }, [busynessScore, locationId]);
+  }, [fallbackSeries, locationId]);
+
+  const latestBusyness = useMemo(() => {
+    if (
+      !Array.isArray(hourlyBusyness) ||
+      typeof currentHourIndex !== "number"
+    ) {
+      return null;
+    }
+
+    const safeIndex = Math.max(
+      0,
+      Math.min(hourlyBusyness.length - 1, Math.floor(currentHourIndex)),
+    );
+    const value = hourlyBusyness[safeIndex];
+
+    return typeof value === "number" && value !== -1 ? value : null;
+  }, [hourlyBusyness, currentHourIndex]);
 
   return (
-    <div className="bg-white w-72 overflow-hidden rounded-2xl shadow-lg">
+    <div className="w-72 overflow-hidden rounded-2xl bg-white shadow-lg">
       <div className="relative h-40 w-full">
         <Image
           src={imageSrc}
@@ -61,12 +110,25 @@ export default function LocationCard({
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900">{name}</h3>
           <span className="text-sm font-medium text-gray-700">
-            {busynessScore !== null
-              ? `Busyness: ${busynessScore}/10`
+            {latestBusyness !== null
+              ? `Busyness: ${latestBusyness}/10`
               : "Loading..."}
           </span>
         </div>
-        <div className="h-24 rounded-xl bg-gray-200" />
+        <LocationGraph
+          hourlyBusyness={hourlyBusyness}
+          currentHourIndex={currentHourIndex}
+        />
+        <div className="flex items-center justify-between text-xs text-gray-500">
+          <span className="flex items-center gap-1">
+            <span className="inline-block size-2 rounded-full bg-blue-500" />
+            Past hours
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block size-2 rounded-full bg-gray-400" />
+            Upcoming hours
+          </span>
+        </div>
       </div>
     </div>
   );
