@@ -1,6 +1,6 @@
 # Configuration files
 # Keep sensitive information like API keys out of version control.
 .env
-
+frontend
 # macOS-specific files
 .DS_Store

@@ -1,4 +1,4 @@
-from mongoengine import Document, StringField, DateTimeField, IntField, BooleanField
+from mongoengine import Document, StringField, DateTimeField, IntField, BooleanField, ListField
 
 
 class User(Document):
@@ -18,3 +18,4 @@ class Report(Document):
 class Location(Document):
     name = StringField(required=True, unique=True, max_length=200)
     current_busyness = IntField()
+    busyness_hourly = ListField(IntField(), default=lambda: [-1] * 24)

@@ -5,7 +5,7 @@ from flask_cors import CORS
 from flask_login import LoginManager, login_user, logout_user, login_required, UserMixin, current_user
 from models import User, Report, Location
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 app = Flask(__name__)
@@ -117,6 +117,10 @@ def reports():
         }), 201
 
     elif request.method == "GET":
+        # Delete reports older than one hour per read
+        one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+        Report.objects(date_posted__lt=one_hour_ago).delete()
+
         reports_list = []
         all_reports = Report.objects.order_by('-date_posted')  
         for report in all_reports:
@@ -141,10 +145,13 @@ def get_locations():
         location_list.append({
             "id": str(location.id),
             "name": location.name,
-            "current_busyness": location.current_busyness
+            "current_busyness": location.current_busyness,
+            "busyness_hourly": location.busyness_hourly
         })
 
     return jsonify({"locations": location_list}), 200
+
+
 
 if __name__ == "__main__":
     app.run(debug=True)
