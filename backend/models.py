@@ -1,12 +1,15 @@
-from mongoengine import Document, StringField, DateTimeField, IntField, BooleanField, ListField
+from flask_login import UserMixin 
+from mongoengine import Document, StringField, DateTimeField, IntField, ListField
 
-
-class User(Document):
+class User(Document, UserMixin): 
     username = StringField(required=True, unique=True, max_length=200)
-    password_hash = StringField(required=True)
+    password = StringField(required=True)
     email = StringField(required=True, unique=True)
-    is_admin = BooleanField(default=False)
 
+
+    def get_id(self):
+        """Returns the user ID as a string for Flask-Login."""
+        return str(self.id)
 
 class Report(Document):
     author = StringField(required=True, max_length=200)
