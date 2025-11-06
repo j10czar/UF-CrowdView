@@ -4,6 +4,8 @@ import LocationCard from "./LocationCard"
 
 function dashboard() {
   const locations = [
+    // For now we're seeding each card with a rough busyness guess.
+    // LocationCard turns this single number into the hour-by-hour dummy series that powers the graph.
     {
       id: "library-west",
       name: "Library West",
