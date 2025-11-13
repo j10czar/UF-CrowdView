@@ -3,7 +3,7 @@ from mongoengine import connect
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user 
-from models import User, Report, Location 
+from models import User, Location 
 import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
