@@ -3,9 +3,9 @@ from mongoengine import connect
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user 
-from models import User, Report, Location 
+from models import User, Location 
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 app = Flask(__name__)
@@ -29,7 +29,7 @@ connect(host=os.environ.get("MONGODB_URI"))
 def load_user(user_id):
     try:
         return User.objects(id=user_id).first()
-    except Exception:
+    except (ValueError, TypeError): # Catches potential errors from invalid user_id format
         return None
 
 @app.route("/login", methods=["GET", "POST"])
@@ -41,7 +41,7 @@ def login():
     email = request.json["email"]
     password = request.json["password"]
     user = User.objects(email=email).first()
-    if user is None or not bcrypt.check_password_hash(user.password_hash, password):
+    if user is None or not bcrypt.check_password_hash(user.password, password): 
         return jsonify({"error": "Unauthorized"}), 401
     login_user(user)
     return jsonify({
@@ -56,15 +56,21 @@ def signup():
         return jsonify({"error": "Missing email or password"}), 400
     email = data.get("email")
     password = data.get("password")
+    username_prefix = email.split("@")[0]
+    if len(username_prefix) < 3:
+        return jsonify({"error": "Username must be at least 3 characters long."}), 400
+        
     if User.objects(email=email).first():
         return jsonify({"error": "Email already exists"}), 409
     if not email.endswith("@ufl.edu"):
         return jsonify({"error": "Only ufl.edu emails are allowed for signup"}), 400
+    
     hashed_password = bcrypt.generate_password_hash(password).decode("utf-8")
+    
     new_user = User(
         email=email,
-        username=email.split("@")[0],
-        password_hash=hashed_password,
+        username=username_prefix,
+        password=hashed_password, 
     )
     new_user.save()
     login_user(new_user)
@@ -81,7 +87,7 @@ def logout():
     session.clear()
     return jsonify({"message": "Successfully logged out"}), 200
 
-
+'''
 @app.route('/reports', methods=["POST", "GET"])
 @login_required
 def reports():
@@ -111,6 +117,8 @@ def reports():
         }), 201
 
     elif request.method == "GET":
+        one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+        Report.objects(date_posted__lt=one_hour_ago).delete()
         reports_list = []
         all_reports = Report.objects.order_by('-date_posted')  
         for report in all_reports:
@@ -123,35 +131,88 @@ def reports():
             })
         
         return jsonify({"reports": reports_list}), 200
+'''
 
-@app.route('/locations', methods=["GET"])
+# GET all locations
+@app.route('/locations', methods=['GET'])
 @login_required
 def get_locations():
-    location_list = []
-    all_locations = Location.objects.order_by('name')  
+    locations = Location.objects.order_by('name')
+    return jsonify({
+        "locations": [
+            {
+                "id": str(loc.id),
+                "name": loc.name,
+                "busyness_ratings": loc.busyness_ratings
+            } for loc in locations
+        ]
+    }), 200
 
-    for location in all_locations:
-        location_list.append({
-            "id": str(location.id),
-            "name": location.name,
-            "current_busyness": location.current_busyness
-        })
+# GET a specific location's busyness
+@app.route('/locations/<location_id>/busyness', methods=['GET'])
+@login_required
+def get_location_busyness(location_id):
+    location = Location.objects(id=location_id).first()
+    if not location:
+        return jsonify({"error": "Location not found"}), 404
 
-    return jsonify({"locations": location_list}), 200
+    return jsonify({
+        "hourlyBusyness": location.busyness_ratings
+    }), 200
 
+# POST a busyness report for a location
+@app.route('/locations/<location_id>/report-busyness', methods=['POST'])
+@login_required
+def report_busyness(location_id):
+    """
+    The new rating is a weighted average: 20% of the new report
+    and 80% of the existing rating for the current hour.
+    """
+    location = Location.objects(id=location_id).first()
+    if not location:
+        return jsonify({"error": "Location not found"}), 404
+
+    data = request.get_json()
+    busyness_level = data.get("busyness_level")
+
+    if busyness_level is None or not (1 <= busyness_level <= 10):
+        return jsonify({"error": "A 'busyness_level' between 1 and 10 is required"}), 400
+
+    current_hour_utc = datetime.utcnow().hour
+    old_rating = location.busyness_ratings[current_hour_utc]
+
+    if old_rating == -1:
+        # If there's no previous rating, use the new one directly.
+        new_rating = busyness_level
+    else:
+        new_rating = (busyness_level * 0.2) + (old_rating * 0.8)
+
+    # Update the rating for the current hour, rounded to the nearest integer.
+    location.busyness_ratings[current_hour_utc] = round(new_rating)
+    location.save()
+
+    return jsonify({"message": "Busyness report submitted successfully"}), 201
+
+# POST a new location
 @app.route('/admin/locations', methods=['POST'])
 @login_required
 def add_location():
     data = request.get_json()
     name = data.get("name")
-    current_busyness = data.get("current_busyness", 0)
+    busyness_ratings = data.get("busyness_ratings")
 
-    if not name:
-        return jsonify({"error": "Missing location name"}), 400
-    
-    location = Location(name=name, current_busyness=current_busyness)
+    if not name or not busyness_ratings:
+        return jsonify({"error": "Missing name or busyness_ratings"}), 400
+
+    if len(busyness_ratings) != 24:
+        return jsonify({"error": "busyness_ratings must have exactly 24 integers"}), 400
+
+    if any(r < 1 or r > 10 for r in busyness_ratings):
+        return jsonify({"error": "Each rating must be between 1 and 10"}), 400
+
+    location = Location(name=name, busyness_ratings=busyness_ratings)
     location.save()
-    return jsonify({"message":"Location added", "id":str(location.id)}), 201
+    return jsonify({"message": "Location added successfully", "id": str(location.id)}), 201
 
 # UPDATE a location’s busyness or name
 @app.route('/admin/locations/<location_id>', methods=['PUT'])
@@ -175,13 +236,12 @@ def update_location(location_id):
 @app.route('/admin/locations/<location_id>', methods=['DELETE'])
 @login_required
 def delete_location(location_id):
-    
     location = Location.objects(id=location_id).first()
     if not location:
         return jsonify({"error": "Location not found"}), 404
-    
+
     location.delete()
-    return jsonify({"message": "Location deleted"}), 200
+    return jsonify({"message": "Location deleted successfully"}), 200
 
 
 if __name__ == "__main__":
