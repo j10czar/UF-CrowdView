@@ -10,7 +10,25 @@ const DUMMY_HOURLY_TEMPLATE = [
   3, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 4, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4, 4,
 ];
 
+function getCurrentUtcHourIndex(seriesLength) {
+  if (!Number.isFinite(seriesLength) || seriesLength <= 0) {
+    return null;
+  }
+
+  const utcHour = new Date().getUTCHours();
+
+  if (!Number.isFinite(utcHour)) {
+    return null;
+  }
+
+  const normalizedLength = Math.max(1, Math.floor(seriesLength));
+  const normalizedHour = ((Math.floor(utcHour) % normalizedLength) + normalizedLength) % normalizedLength;
+
+  return normalizedHour;
+}
+
 function generateFallbackSeries(baseScore = FALLBACK_BUSYNESS) {
+  // Take the seed score from the card props and fan it out across the 24-hour template so the graph has something realistic-ish to render before live data arrives.
   const delta = (baseScore ?? FALLBACK_BUSYNESS) - FALLBACK_BUSYNESS;
 
   return DUMMY_HOURLY_TEMPLATE.map((value) => {
@@ -30,7 +48,10 @@ export default function LocationCard({
     [initialBusyness],
   );
 
-  const fallbackCurrentHourIndex = Math.max(6, fallbackSeries.length - 7);
+  const fallbackCurrentHourIndex = useMemo(
+    () => getCurrentUtcHourIndex(fallbackSeries.length),
+    [fallbackSeries.length],
+  );
 
   const [hourlyBusyness, setHourlyBusyness] = useState(fallbackSeries);
   const [currentHourIndex, setCurrentHourIndex] = useState(
@@ -55,7 +76,7 @@ export default function LocationCard({
         // const response = await fetch(`/api/locations/${locationId}/busyness`);
         // const { hourlyBusyness: series } = await response.json();
         const series = fallbackSeries;
-        const resolvedCurrentHourIndex = Math.max(6, series.length - 7);
+        const resolvedCurrentHourIndex = getCurrentUtcHourIndex(series.length);
 
         if (isMounted) {
           setHourlyBusyness(series);
@@ -119,10 +140,14 @@ export default function LocationCard({
           hourlyBusyness={hourlyBusyness}
           currentHourIndex={currentHourIndex}
         />
-        <div className="flex items-center justify-between text-xs text-gray-500">
+        <div className="flex items-center justify-center gap-4 text-xs text-gray-500">
           <span className="flex items-center gap-1">
             <span className="inline-block size-2 rounded-full bg-blue-500" />
             Past hours
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block size-2 rounded-full bg-blue-600" />
+            Current hour
           </span>
           <span className="flex items-center gap-1">
             <span className="inline-block size-2 rounded-full bg-gray-400" />
