@@ -1,120 +1,152 @@
 "use client";
 
-import React, { useState } from "react";
-import Link from "next/link";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation"; 
 import { Button } from "@/components/ui/button";
 import LocationCard from "./LocationCard";
 import NewReportModal from "./NewReportModal";
+import axios from "axios";
 
-const LOCATIONS = [
-  // For now we're seeding each card with a rough busyness guess.
-  // LocationCard turns this single number into the hour-by-hour dummy series that powers the graph.
-  {
-    id: "library-west",
-    name: "Library West",
-    imageSrc: "/images/libwest.jpg",
-    initialBusyness: 7,
-  },
-  {
-    id: "reitz-union",
-    name: "Reitz Union",
-    imageSrc: "/images/reitz.png",
-    initialBusyness: 4,
-  },
-  {
-    id: "norman-hall",
-    name: "Norman Hall",
-    imageSrc: "/images/norman.jpg",
-    initialBusyness: 9,
-  },
-  {
-    id: "marston-library",
-    name: "Marston Library",
-    imageSrc: "/images/marston.jpg",
-    initialBusyness: 9,
-  },
-  {
-    id: "turlington-plaza",
-    name: "Turlington Plaza",
-    imageSrc: "/images/turlington.jpg",
-    initialBusyness: 6,
-  },
-  {
-    id: "broward-dining",
-    name: "Broward Dining",
-    imageSrc: "/images/broward-dining.png",
-    initialBusyness: 5,
-  },
-  {
-    id: "gator-corner",
-    name: "Gator Corner",
-    imageSrc: "/images/gator-corner.jpg",
-    initialBusyness: 3,
-  },
-];
+const LOCATION_IMAGES = {
+  "Library West": "/images/libwest.jpg",
+  "Reitz Union": "/images/reitz.png",
+  "Norman Hall": "/images/norman.jpg",
+  "Marston Library": "/images/marston.jpg",
+  "Turlington Plaza": "/images/turlington.jpg",
+  "Broward Dining": "/images/broward-dining.png",
+  "Gator Corner": "/images/gator-corner.jpg",
+};
 
-function DashboardPage() {
+export default function Home() {
+  const [locations, setLocations] = useState([]);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  
+  const [isAuthorized, setIsAuthorized] = useState(false);
 
-  const handleReportSubmit = (payload) => {
-    console.log("Submitting report:", payload);
+  const router = useRouter(); 
+
+  useEffect(() => {
+    const verifySession = async () => {
+        try {
+            await axios.get("http://localhost:5000/check-session", { withCredentials: true });
+            setIsAuthorized(true); 
+        } catch (error) {
+            router.replace("/"); // User is invalid
+        }
+    };
+    verifySession();
+  }, [router]);
+
+  // Fetch Data (Only after auth is confirmed) 
+  useEffect(() => {
+    if (!isAuthorized) return; 
+
+    async function fetchLocations() {
+      try {
+        const response = await axios.get("http://localhost:5000/locations", {
+          withCredentials: true,
+        });
+        if (response.data && response.data.locations) {
+          const validLocations = response.data.locations.filter(loc => 
+            LOCATION_IMAGES.hasOwnProperty(loc.name)
+          );
+          setLocations(validLocations);
+        }
+      } catch (error) {
+        console.error("Failed to fetch locations:", error);
+      }
+    }
+    fetchLocations();
+  }, [isAuthorized]);
+
+  const handleReportSuccess = () => {
+    console.log("Report submitted successfully. Refreshing cards...");
+    setRefreshKey((prev) => prev + 1);
     setIsReportModalOpen(false);
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-50">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 pb-12 pt-8">
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-blue-200/80">
-              UF CrowdView
-            </p>
-            <h2 className="text-2xl font-semibold text-white">Live campus dashboard</h2>
-            <p className="text-sm text-slate-300">
-              Real-time busyness from your peers across the spots that matter most.
-            </p>
+  const handleLogout = async () => {
+    try {
+      await axios.get("http://localhost:5000/logout", { withCredentials: true });
+      router.push("/"); 
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  };
+
+  // Block rendering until we know the user is logged in
+  if (!isAuthorized) {
+      return (
+          <div className="flex min-h-screen items-center justify-center bg-gray-50">
+              <div className="text-gray-400 animate-pulse text-sm font-medium">Verifying access...</div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+      );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="flex w-full justify-between items-center bg-gray-950 px-6 py-4 shadow-md sticky top-0 z-40">
+        
+        {/* Logo (Refreshes Data) */}
+        <div 
+            className="cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={() => window.location.reload()} 
+        >
+            <h2 className="text-xl font-bold text-white tracking-wide">UF CrowdView</h2>
+        </div>
+
+        {/* Menu Actions */}
+        <div className="flex items-center gap-3">
+            
+            {/* NEW: Exit Button */}
             <Button
               type="button"
               onClick={() => setIsReportModalOpen(true)}
-              className="bg-blue-500 px-4 py-2 font-semibold text-white shadow-lg shadow-blue-500/25 hover:bg-blue-600"
+              className="bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700 transition-colors rounded-lg shadow-sm"
             >
               + New Report
             </Button>
-            <Link href="/admin">
-              <Button
-                type="button"
-                variant="outline"
-                className="border-white/25 bg-white/5 px-4 py-2 font-semibold text-white hover:border-white/50 hover:bg-white/10"
-              >
-                Admin Dashboard
-              </Button>
-            </Link>
-          </div>
-        </header>
 
-        <div className="grid justify-center gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {LOCATIONS.map((location) => (
+            <Button
+                variant="ghost"
+                onClick={() => router.push('/')}
+                className="bg-red-600 px-4 py-2 font-bold text-white hover:bg-red-700 transition-colors rounded-lg shadow-sm"
+            >
+                Exit
+            </Button>
+
+
+        </div>
+      </div>
+
+      {/* Locations Grid */}
+      <div className="mx-auto flex max-w-7xl flex-wrap justify-center gap-8 p-8">
+        {locations.length === 0 ? (
+          <div className="flex h-64 w-full items-center justify-center text-gray-500 animate-pulse">
+            Loading campus locations...
+          </div>
+        ) : (
+          locations.map((location) => (
             <LocationCard
               key={location.id}
               locationId={location.id}
               name={location.name}
-              imageSrc={location.imageSrc}
-              initialBusyness={location.initialBusyness}
+              imageSrc={LOCATION_IMAGES[location.name]}
+              refreshTrigger={refreshKey}
             />
-          ))}
-        </div>
+          ))
+        )}
       </div>
 
+      {/* Report Modal */}
       <NewReportModal
         open={isReportModalOpen}
         onOpenChange={setIsReportModalOpen}
-        locations={LOCATIONS}
-        onSubmit={handleReportSubmit}
+        locations={locations}
+        onSubmit={handleReportSuccess}
       />
     </div>
   );
 }
-
-export default DashboardPage;

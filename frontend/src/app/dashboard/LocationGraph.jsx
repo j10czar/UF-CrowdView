@@ -1,21 +1,17 @@
 import React, { useMemo } from "react";
 
 const MAX_BUSINESS_SCORE = 10;
-const HOURS_EACH_SIDE = 3;
+const HOURS_EACH_SIDE = 3; 
 
 function clampScore(score) {
-  if (
-    typeof score !== "number" ||
-    Number.isNaN(score) ||
-    score < 0
-  ) {
-    return -1;
+  if (typeof score !== "number" || Number.isNaN(score) || score < 0) {
+    return 0;
   }
-
-  return Math.min(MAX_BUSINESS_SCORE, Math.max(0, score));
+  return Math.min(MAX_BUSINESS_SCORE, score);
 }
 
 function LocationGraph({ hourlyBusyness = [], currentHourIndex }) {
+  
   const formatHourLabel = useMemo(() => {
     const formatter = new Intl.DateTimeFormat(undefined, {
       hour: "numeric",
@@ -23,19 +19,9 @@ function LocationGraph({ hourlyBusyness = [], currentHourIndex }) {
     });
 
     return (date) => {
-      try {
-        const parts = formatter.formatToParts(date);
-        const hourPart = parts.find((part) => part.type === "hour");
-        if (hourPart) {
-          return hourPart.value;
-        }
-      } catch (error) {
-        // Fallback to basic string stripping if formatToParts is unavailable.
-      }
-
       return formatter
         .format(date)
-        .replace(/\s*([AP]M)\.?/i, "")
+        .replace(/\s*([AP]M)\.?/i, "") 
         .trim();
     };
   }, []);
@@ -45,93 +31,90 @@ function LocationGraph({ hourlyBusyness = [], currentHourIndex }) {
       return [];
     }
 
+    const safeCurrentIndex = typeof currentHourIndex === "number" 
+      ? Math.floor(currentHourIndex) 
+      : new Date().getHours();
+
     const seriesLength = hourlyBusyness.length;
-    const effectiveCurrentIndex =
-      typeof currentHourIndex === "number" && Number.isFinite(currentHourIndex)
-        ? ((Math.floor(currentHourIndex) % seriesLength) + seriesLength) %
-          seriesLength
-        : (() => {
-            const utcHour = new Date().getUTCHours();
-            if (!Number.isFinite(utcHour)) {
-              return null;
-            }
-            return (Math.floor(utcHour) % seriesLength + seriesLength) %
-              seriesLength;
-          })();
-
-    if (effectiveCurrentIndex === null) {
-      return [];
-    }
-
+    
     const offsets = Array.from(
       { length: HOURS_EACH_SIDE * 2 + 1 },
-      (_, index) => index - HOURS_EACH_SIDE,
+      (_, index) => index - HOURS_EACH_SIDE
     );
 
     const now = new Date();
     now.setMinutes(0, 0, 0);
-    const currentIndex = effectiveCurrentIndex;
 
-    return offsets
-      .map((offset) => {
-        const displayTime = new Date(now.getTime() + offset * 60 * 60 * 1000);
-        const normalizedIndex =
-          ((currentIndex + offset) % seriesLength + seriesLength) %
-          seriesLength;
-        const rawScore = hourlyBusyness[normalizedIndex];
-        const score = clampScore(rawScore);
+    return offsets.map((offset) => {
+      const displayTime = new Date(now.getTime() + offset * 60 * 60 * 1000);
+      
+      const normalizedIndex =
+        ((safeCurrentIndex + offset) % seriesLength + seriesLength) %
+        seriesLength;
 
-        return {
-          id: `${normalizedIndex}-${displayTime.toISOString()}`,
-          label: formatHourLabel(displayTime),
-          score,
-          hourOffset: offset,
-          isFuture: offset > 0,
-        };
-      })
-      .filter((bar) => bar.score !== -1);
+      const rawScore = hourlyBusyness[normalizedIndex];
+      const score = clampScore(rawScore);
+
+      return {
+        id: `${normalizedIndex}-${offset}`,
+        label: formatHourLabel(displayTime),
+        score,
+        hourOffset: offset,
+        isFuture: offset > 0,
+        isCurrent: offset === 0,
+      };
+    });
   }, [hourlyBusyness, currentHourIndex, formatHourLabel]);
 
   if (bars.length === 0) {
     return (
-      <div className="flex h-36 items-center justify-center rounded-xl border border-white/10 bg-slate-900/60 text-sm text-slate-300">
-        No busyness data available.
+      <div className="flex h-36 items-center justify-center rounded-xl bg-gray-100 text-sm text-gray-500">
+        No data available
       </div>
     );
   }
 
   return (
-    <div className="relative flex h-36 items-end gap-2 rounded-xl border border-white/10 bg-slate-900/60 p-3 backdrop-blur">
+    <div className="relative flex h-36 items-end gap-2 rounded-xl bg-gray-100 p-3">
+      {/* Background Line */}
       <div
-        className="pointer-events-none absolute bottom-3 left-3 right-3 h-px bg-white/10"
+        className="pointer-events-none absolute bottom-3 left-3 right-3 h-px bg-gray-300"
         aria-hidden="true"
       />
-      {bars.map(({ id, label, score, isFuture, hourOffset }) => (
+      
+      {bars.map(({ id, label, score, isFuture, isCurrent, hourOffset }) => (
         <div
           key={id}
           className="relative z-10 flex h-full min-h-0 w-full flex-1 flex-col items-center gap-2"
-          aria-label={`${label}: ${score}/10`}
         >
-          <div className="flex min-h-0 w-full flex-1 items-end overflow-hidden rounded-sm bg-white/10">
+          {/* Bar Container */}
+          <div className="flex min-h-0 w-full flex-1 items-end overflow-hidden rounded-sm bg-gray-200">
+            {/* The Colored Bar */}
             <div
-              className={`relative flex w-full items-end justify-center rounded-sm transition-all ${
-                hourOffset === 0
-                  ? "bg-blue-400"
+              className={`relative flex w-full items-end justify-center rounded-sm transition-all duration-500 ${
+                isCurrent
+                  ? "bg-blue-600" 
                   : isFuture
-                    ? "bg-slate-500"
-                    : "bg-blue-500"
+                  ? "bg-gray-400" 
+                  : "bg-blue-400" 
               }`}
               style={{
                 height: `${(score / MAX_BUSINESS_SCORE) * 100}%`,
                 maxHeight: "100%",
               }}
             >
-              <span className="mb-1 text-[10px] font-semibold text-white drop-shadow-sm">
-                {score}
-              </span>
+              {score > 0 && (
+                <span className="mb-1 text-[10px] font-semibold text-white drop-shadow-sm">
+                  {score}
+                </span>
+              )}
             </div>
           </div>
-          <span className="text-xs font-medium text-slate-200">{label}</span>
+          
+          {/* Hour Label */}
+          <span className={`text-xs font-medium ${isCurrent ? 'text-blue-700 font-bold' : 'text-gray-600'}`}>
+            {label}
+          </span>
         </div>
       ))}
     </div>
