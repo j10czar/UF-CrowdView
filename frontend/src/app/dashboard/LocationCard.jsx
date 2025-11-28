@@ -3,20 +3,17 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import LocationGraph from "./LocationGraph";
+import { DUMMY_HOURLY_TEMPLATE } from "@/lib/busyness";
 
 const HOURS_IN_DAY = 24;
 const FALLBACK_BUSYNESS = 5;
-const DUMMY_HOURLY_TEMPLATE = [
-  3, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 4, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4, 4,
-];
-
 function getCurrentUtcHourIndex(seriesLength) {
   if (!Number.isFinite(seriesLength) || seriesLength <= 0) {
     return null;
   }
 
   const utcHour = new Date().getUTCHours();
-
+ 
   if (!Number.isFinite(utcHour)) {
     return null;
   }
@@ -116,7 +113,7 @@ export default function LocationCard({
   }, [hourlyBusyness, currentHourIndex]);
 
   return (
-    <div className="w-72 overflow-hidden rounded-2xl bg-white shadow-lg">
+    <div className="w-72 overflow-hidden rounded-3xl border border-white/10 bg-white/5 text-slate-50 shadow-2xl backdrop-blur">
       <div className="relative h-40 w-full">
         <Image
           src={imageSrc}
@@ -126,11 +123,12 @@ export default function LocationCard({
           className="object-cover"
           priority
         />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
       </div>
       <div className="flex flex-col gap-3 p-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">{name}</h3>
-          <span className="text-sm font-medium text-gray-700">
+          <h3 className="text-lg font-semibold text-white">{name}</h3>
+          <span className="text-sm font-medium text-slate-200">
             {latestBusyness !== null
               ? `Busyness: ${latestBusyness}/10`
               : "Loading..."}
@@ -140,17 +138,17 @@ export default function LocationCard({
           hourlyBusyness={hourlyBusyness}
           currentHourIndex={currentHourIndex}
         />
-        <div className="flex items-center justify-center gap-4 text-xs text-gray-500">
+        <div className="flex items-center justify-center gap-4 text-xs text-slate-300">
           <span className="flex items-center gap-1">
-            <span className="inline-block size-2 rounded-full bg-blue-500" />
+            <span className="inline-block size-2 rounded-full bg-blue-400" />
             Past hours
           </span>
           <span className="flex items-center gap-1">
-            <span className="inline-block size-2 rounded-full bg-blue-600" />
+            <span className="inline-block size-2 rounded-full bg-blue-500" />
             Current hour
           </span>
           <span className="flex items-center gap-1">
-            <span className="inline-block size-2 rounded-full bg-gray-400" />
+            <span className="inline-block size-2 rounded-full bg-slate-400" />
             Upcoming hours
           </span>
         </div>
