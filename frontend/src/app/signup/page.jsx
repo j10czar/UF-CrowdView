@@ -36,12 +36,21 @@ export default function SignUp() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h3 className="mt-6 text-center text-3xl font-bold text-white">
-            Sign up for UF CrowdView
-          </h3>
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-50">
+      <div className="mx-auto flex max-w-5xl flex-col gap-10 px-6 pb-14 pt-12">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-blue-200/80">
+              UF CrowdView
+            </p>
+            <h1 className="text-2xl font-semibold text-white">Create your account</h1>
+            <p className="text-sm text-slate-300">
+              Join the community keeping campus flow moving.
+            </p>
+          </div>
+          <Link href="/signin" className="text-sm text-blue-200 underline underline-offset-4">
+            Have an account? Sign in
+          </Link>
         </div>
 
         <form onSubmit={handleSignup} className="mt-8 space-y-6">
@@ -66,7 +75,7 @@ export default function SignUp() {
                 onChange={(e) => setPassword(e.target.value)}
               />
               <Input
-                className="mb-4"
+                className="bg-white/5 text-white placeholder:text-slate-400"
                 type="password"
                 placeholder="Confirm Password"
                 value={confirm}

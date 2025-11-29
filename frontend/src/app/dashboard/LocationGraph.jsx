@@ -94,16 +94,16 @@ function LocationGraph({ hourlyBusyness = [], currentHourIndex }) {
 
   if (bars.length === 0) {
     return (
-      <div className="flex h-36 items-center justify-center rounded-xl bg-gray-100 text-sm text-gray-500">
+      <div className="flex h-36 items-center justify-center rounded-xl border border-white/10 bg-slate-900/60 text-sm text-slate-300">
         No busyness data available.
       </div>
     );
   }
 
   return (
-    <div className="relative flex h-36 items-end gap-2 rounded-xl bg-gray-100 p-3">
+    <div className="relative flex h-36 items-end gap-2 rounded-xl border border-white/10 bg-slate-900/60 p-3 backdrop-blur">
       <div
-        className="pointer-events-none absolute bottom-3 left-3 right-3 h-px bg-gray-300"
+        className="pointer-events-none absolute bottom-3 left-3 right-3 h-px bg-white/10"
         aria-hidden="true"
       />
       {bars.map(({ id, label, score, isFuture, hourOffset }) => (
@@ -112,13 +112,13 @@ function LocationGraph({ hourlyBusyness = [], currentHourIndex }) {
           className="relative z-10 flex h-full min-h-0 w-full flex-1 flex-col items-center gap-2"
           aria-label={`${label}: ${score}/10`}
         >
-          <div className="flex min-h-0 w-full flex-1 items-end overflow-hidden rounded-sm bg-gray-200">
+          <div className="flex min-h-0 w-full flex-1 items-end overflow-hidden rounded-sm bg-white/10">
             <div
               className={`relative flex w-full items-end justify-center rounded-sm transition-all ${
                 hourOffset === 0
-                  ? "bg-blue-600"
+                  ? "bg-blue-400"
                   : isFuture
-                    ? "bg-gray-400"
+                    ? "bg-slate-500"
                     : "bg-blue-500"
               }`}
               style={{
@@ -131,7 +131,7 @@ function LocationGraph({ hourlyBusyness = [], currentHourIndex }) {
               </span>
             </div>
           </div>
-          <span className="text-xs font-medium text-gray-600">{label}</span>
+          <span className="text-xs font-medium text-slate-200">{label}</span>
         </div>
       ))}
     </div>

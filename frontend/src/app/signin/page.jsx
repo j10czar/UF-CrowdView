@@ -54,7 +54,7 @@ export default function SignIn() {
                 onChange={(e) => setEmail(e.target.value)}
               />
               <Input
-                className="mb-4"
+                className="bg-white/5 text-white placeholder:text-slate-400"
                 type="password"
                 placeholder="Password"
                 value={password}

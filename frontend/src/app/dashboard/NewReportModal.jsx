@@ -166,7 +166,7 @@ function NewReportModal({
       aria-modal="true"
     >
       <div
-        className={`w-full max-w-lg rounded-3xl bg-white shadow-2xl transition-all duration-500 ease-out ${
+        className={`w-full max-w-lg rounded-3xl border border-white/10 bg-slate-950/70 text-slate-50 shadow-2xl backdrop-blur transition-all duration-500 ease-out ${
           isClosing || isEntering ? "scale-95 opacity-0" : "scale-100 opacity-100"
         }`}
         onClick={(event) => event.stopPropagation()}
@@ -177,25 +177,25 @@ function NewReportModal({
         >
           <div className="flex items-start justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">
+              <h3 className="text-lg font-semibold text-white">
                 Share a new report
               </h3>
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-slate-300">
                 Let everyone know how busy it feels so they can plan ahead.
               </p>
             </div>
             <button
               type="button"
               onClick={handleClose}
-              className="inline-flex size-10 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition hover:bg-gray-200 hover:text-gray-700"
+              className="inline-flex size-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-300 transition hover:border-white/30 hover:bg-white/10 hover:text-white"
               aria-label="Close report form"
             >
               ×
             </button>
           </div>
 
-          <div className="rounded-2xl bg-gray-50 p-3">
-            <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+            <span className="text-xs font-medium uppercase tracking-wide text-blue-100/90">
               When is this report for?
             </span>
             <div className="mt-3 grid grid-cols-2 gap-2">
@@ -208,8 +208,8 @@ function NewReportModal({
                     onClick={() => handleScopeChange(scope)}
                     className={`rounded-xl border px-3 py-3 text-sm font-semibold transition-all duration-200 ease-out ${
                       isActive
-                        ? "border-blue-500 bg-blue-50 text-blue-600 shadow-sm"
-                        : "border-transparent bg-white text-gray-600 hover:border-gray-200 hover:text-gray-800"
+                        ? "border-blue-400/50 bg-blue-500/10 text-blue-100 shadow-sm"
+                        : "border-white/5 bg-white/5 text-slate-200 hover:border-white/20 hover:text-white"
                     }`}
                   >
                     {scope === "current" ? "Right now" : "Earlier today"}
@@ -228,7 +228,7 @@ function NewReportModal({
             }`}
           >
             <label
-              className={`flex flex-col gap-2 text-sm font-medium text-gray-700 transition-all duration-300 ease-out ${
+              className={`flex flex-col gap-2 text-sm font-medium text-slate-200 transition-all duration-300 ease-out ${
                 reportScope === "previous"
                   ? "translate-y-0 opacity-100"
                   : "translate-y-1 opacity-0"
@@ -241,25 +241,25 @@ function NewReportModal({
                 required
                 value={reportTime}
                 onChange={(event) => setReportTime(event.target.value)}
-                className="h-12 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm transition-all duration-200 ease-out focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="h-12 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white shadow-sm transition-all duration-200 ease-out placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               />
-              <span className="text-xs font-medium text-gray-400">
+              <span className="text-xs font-medium text-slate-300">
                 Currently set to {selectedTimeLabel || "your chosen time"}.
               </span>
             </label>
           </div>
 
-          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-inner">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-inner">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className="text-sm font-semibold text-gray-800">
+                <h4 className="text-sm font-semibold text-white">
                   Busyness rating
                 </h4>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-slate-300">
                   1 is empty; 10 is packed shoulder-to-shoulder.
                 </p>
               </div>
-              <span className="rounded-xl bg-blue-500/10 px-4 py-1 text-lg font-bold text-blue-600 transition-all duration-200 ease-out">
+              <span className="rounded-xl bg-blue-500/15 px-4 py-1 text-lg font-bold text-blue-100 transition-all duration-200 ease-out">
                 {busynessRating}
               </span>
             </div>
@@ -274,7 +274,7 @@ function NewReportModal({
                   setBusynessRating(value[0] ?? busynessRating)
                 }
               />
-              <div className="mt-2 flex justify-between text-xs font-medium text-gray-400">
+              <div className="mt-2 flex justify-between text-xs font-medium text-slate-300">
                 <span>1</span>
                 <span>10</span>
               </div>
@@ -282,7 +282,7 @@ function NewReportModal({
           </div>
 
           <label
-            className={`flex flex-col gap-2 text-sm font-medium text-gray-700 transition-all duration-300 ease-out ${
+            className={`flex flex-col gap-2 text-sm font-medium text-slate-200 transition-all duration-300 ease-out ${
               isClosing || isEntering
                 ? "translate-y-1 opacity-0"
                 : "translate-y-0 opacity-100"
@@ -293,7 +293,7 @@ function NewReportModal({
               <select
                 value={selectedLocation}
                 onChange={(event) => setSelectedLocation(event.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm transition-all duration-200 ease-out focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white shadow-sm transition-all duration-200 ease-out focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               >
                 {locations.map((location) => (
                   <option key={location.id} value={location.id}>
@@ -308,14 +308,14 @@ function NewReportModal({
             <Button
               type="button"
               variant="ghost"
-              className="rounded-xl px-6 py-2 text-sm font-semibold text-gray-600 transition-all duration-200 ease-out hover:bg-gray-100"
+              className="rounded-xl px-6 py-2 text-sm font-semibold text-slate-200 transition-all duration-200 ease-out hover:bg-white/10"
               onClick={handleClose}
             >
               Cancel
             </Button>
             <Button
               type="submit"
-              className="rounded-xl bg-blue-600 px-6 py-2 text-sm font-semibold text-white shadow transition-all duration-200 ease-out hover:bg-blue-700"
+              className="rounded-xl bg-blue-600 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-500/25 transition-all duration-200 ease-out hover:bg-blue-700"
             >
               Submit report
             </Button>
