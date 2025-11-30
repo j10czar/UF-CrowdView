@@ -1,12 +1,14 @@
-from flask import Flask, request, jsonify, session, abort
+from flask import Flask, request, jsonify, session
 from mongoengine import connect
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
-from flask_login import LoginManager, login_user, logout_user, login_required, current_user 
-from models import User, Location 
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from models import User, Location, Report
 import os
 from datetime import datetime, timedelta
+from bson.objectid import ObjectId
 from dotenv import load_dotenv
+import dateutil.parser 
 
 app = Flask(__name__)
 
@@ -14,23 +16,28 @@ app = Flask(__name__)
 load_dotenv()
 
 app.config['SECRET_KEY'] = os.environ.get("FLASK_SECRET_KEY", "a_strong_fallback_secret") 
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' 
+app.config['SESSION_COOKIE_SECURE'] = False 
 
 bcrypt = Bcrypt(app)
+
 CORS(app, supports_credentials=True, origins=["http://localhost:3000", "http://127.0.0.1:3000"]) 
 
 login_manager = LoginManager()
 login_manager.login_view = 'login'
 login_manager.init_app(app)
 
-
-# Connect to MongoDB using the URI from environment variables
+# Connect to MongoDB
 connect(host=os.environ.get("MONGODB_URI"))
+
 @login_manager.user_loader
 def load_user(user_id):
     try:
         return User.objects(id=user_id).first()
-    except (ValueError, TypeError): # Catches potential errors from invalid user_id format
+    except (ValueError, TypeError): 
         return None
+
+# --- AUTH ROUTES ---
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -41,12 +48,21 @@ def login():
     email = request.json["email"]
     password = request.json["password"]
     user = User.objects(email=email).first()
+    
     if user is None or not bcrypt.check_password_hash(user.password, password): 
         return jsonify({"error": "Unauthorized"}), 401
+        
+    # Check if banned
+    if hasattr(user, 'banned') and user.banned:
+        return jsonify({"error": "Account is banned"}), 403
+
     login_user(user)
+    
     return jsonify({
         "id": str(user.id),
         "email": user.email,
+        "username": user.username,
+        "isAdmin": getattr(user, "isAdmin", False)
     })
 
 @app.route("/signup", methods=["POST"])
@@ -56,6 +72,7 @@ def signup():
         return jsonify({"error": "Missing email or password"}), 400
     email = data.get("email")
     password = data.get("password")
+    
     username_prefix = email.split("@")[0]
     if len(username_prefix) < 3:
         return jsonify({"error": "Username must be at least 3 characters long."}), 400
@@ -70,15 +87,17 @@ def signup():
     new_user = User(
         email=email,
         username=username_prefix,
-        password=hashed_password, 
+        password=hashed_password,
+        isAdmin=False,
+        banned=False 
     )
     new_user.save()
     login_user(new_user)
     return jsonify({
         "id": str(new_user.id),
         "email": new_user.email,
+        "isAdmin": False
     }), 201
-
 
 @app.route('/logout')
 @login_required
@@ -87,55 +106,15 @@ def logout():
     session.clear()
     return jsonify({"message": "Successfully logged out"}), 200
 
-'''
-@app.route('/reports', methods=["POST", "GET"])
+# --- SECURITY CHECK ROUTE ---
+@app.route('/check-session', methods=['GET'])
 @login_required
-def reports():
-    if request.method == "POST":
-        location_name = request.json.get("location_name")
-        busyness_level = request.json.get("busyness_level")
-        
-        if not location_name or busyness_level is None: 
-            return jsonify({"error": "Missing location_name or busyness_level"}), 400
-        
-        new_report = Report(
-            location_name=location_name,
-            busyness_level=busyness_level,
-            author=current_user.username,
-            date_posted=datetime.utcnow()
-        )
-        new_report.save()
-        return jsonify({
-            "message": "Report submitted successfully",
-            "report": {
-                "id": str(new_report.id),
-                "location_name": new_report.location_name,
-                "busyness_level": new_report.busyness_level,
-                "author": new_report.author,
-                "date_posted": new_report.date_posted.isoformat()
-            }
-        }), 201
+def check_session():
+    return jsonify({"valid": True, "user_id": str(current_user.id)}), 200
 
-    elif request.method == "GET":
-        one_hour_ago = datetime.utcnow() - timedelta(hours=1)
-        Report.objects(date_posted__lt=one_hour_ago).delete()
-        reports_list = []
-        all_reports = Report.objects.order_by('-date_posted')  
-        for report in all_reports:
-            reports_list.append({
-                "id": str(report.id),
-                "location_name": report.location_name,
-                "busyness_level": report.busyness_level,
-                "author": report.author,
-                "date_posted": report.date_posted.isoformat() if report.date_posted else None
-            })
-        
-        return jsonify({"reports": reports_list}), 200
-'''
+# --- LOCATION ROUTES ---
 
-# GET all locations
 @app.route('/locations', methods=['GET'])
-@login_required
 def get_locations():
     locations = Location.objects.order_by('name')
     return jsonify({
@@ -143,105 +122,194 @@ def get_locations():
             {
                 "id": str(loc.id),
                 "name": loc.name,
-                "busyness_ratings": loc.busyness_ratings
+                "busyness": loc.busyness
             } for loc in locations
         ]
     }), 200
 
-# GET a specific location's busyness
-@app.route('/locations/<location_id>/busyness', methods=['GET'])
-@login_required
-def get_location_busyness(location_id):
-    location = Location.objects(id=location_id).first()
+@app.route('/locations/<location_identifier>', methods=['GET'])
+def get_single_location(location_identifier):
+    location = None
+    if ObjectId.is_valid(location_identifier):
+        location = Location.objects(id=location_identifier).first()
+    
+    if not location:
+        query_name = location_identifier.replace("-", " ")
+        location = Location.objects(name__icontains=query_name).first()
+
     if not location:
         return jsonify({"error": "Location not found"}), 404
+
+    live_busyness = list(location.busyness) 
+
+    # Calculate "Live" Score from recent reports (Last 60 mins)
+    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+    
+    recent_reports = Report.objects(
+        location=location, 
+        date_posted__gte=one_hour_ago
+    )
+
+    current_hour_local = datetime.now().hour 
+
+    if recent_reports:
+        total = sum(r.busyness for r in recent_reports)
+        count = len(recent_reports)
+        avg_score = round(total / count)
+        
+        live_busyness[current_hour_local % 24] = avg_score
 
     return jsonify({
-        "hourlyBusyness": location.busyness_ratings
-    }), 200
+        "id": str(location.id),
+        "name": location.name,
+        "busyness": live_busyness,
+        "live_report_count": len(recent_reports)
+    })
 
-# POST a busyness report for a location
-@app.route('/locations/<location_id>/report-busyness', methods=['POST'])
+# --- ADMIN ROUTES ---
+
+def ensure_admin():
+    if not current_user.is_authenticated or not getattr(current_user, "isAdmin", False):
+        return False
+    return True
+
+@app.route('/admin/users', methods=['GET'])
 @login_required
-def report_busyness(location_id):
-    """
-    The new rating is a weighted average: 20% of the new report
-    and 80% of the existing rating for the current hour.
-    """
-    location = Location.objects(id=location_id).first()
+def get_all_users():
+    if not ensure_admin(): return jsonify({"error": "Admin required"}), 403
+    
+    users = User.objects.all()
+    return jsonify([
+        {
+            "id": str(u.id),
+            "username": u.username,
+            "email": u.email,
+            "isAdmin": getattr(u, "isAdmin", False),
+            "banned": getattr(u, "banned", False)
+        } for u in users
+    ])
+
+@app.route('/admin/users/<user_id>/ban', methods=['POST'])
+@login_required
+def toggle_ban_user(user_id):
+    if not ensure_admin(): return jsonify({"error": "Admin required"}), 403
+    
+    user = User.objects(id=user_id).first()
+    if not user: return jsonify({"error": "User not found"}), 404
+    
+    current_status = getattr(user, "banned", False)
+    user.banned = not current_status
+    user.save()
+    
+    return jsonify({"message": "User ban status updated", "banned": user.banned})
+
+@app.route('/admin/locations-data', methods=['GET'])
+@login_required
+def get_admin_locations_data():
+    if not ensure_admin(): return jsonify({"error": "Admin required"}), 403
+    
+    locations = Location.objects.all()
+    data = []
+    
+    last_24h = datetime.utcnow() - timedelta(hours=24)
+    
+    for loc in locations:
+        reports = Report.objects(location=loc, date_posted__gte=last_24h).order_by('-date_posted')
+        
+        report_list = [{
+            "id": str(r.id),
+            "authorName": r.author.username,
+            "busyness": r.busyness,
+            "hour": r.date_posted.hour, 
+            "datePosted": r.date_posted.isoformat(),
+            "note": getattr(r, "note", "No note") 
+        } for r in reports]
+        
+        data.append({
+            "id": str(loc.id),
+            "name": loc.name,
+            "busyness": loc.busyness,
+            "reports": report_list
+        })
+        
+    return jsonify(data)
+
+@app.route('/admin/reports/<report_id>', methods=['DELETE'])
+@login_required
+def delete_report(report_id):
+    if not ensure_admin(): return jsonify({"error": "Admin required"}), 403
+    
+    report = Report.objects(id=report_id).first()
+    if not report: return jsonify({"error": "Report not found"}), 404
+    
+    report.delete()
+    return jsonify({"message": "Report deleted"})
+
+# --- REPORT ROUTES ---
+
+@app.route('/reports', methods=['POST'])
+@login_required
+def submit_report():
+    data = request.get_json()
+    location_id = data.get("location_id")
+    busyness_score = data.get("busyness")
+    
+    timestamp_str = data.get("timestamp") 
+    hour_index = data.get("hour")         
+
+    if not location_id or not busyness_score:
+        return jsonify({"error": "Missing location_id or busyness"}), 400
+
+    try:
+        score = int(busyness_score)
+        if score < 1 or score > 10:
+            raise ValueError
+    except ValueError:
+        return jsonify({"error": "Busyness must be 1-10"}), 400
+
+    location = None 
+    if ObjectId.is_valid(location_id):
+        location = Location.objects(id=location_id).first()
+
     if not location:
-        return jsonify({"error": "Location not found"}), 404
+        query_name = location_id.replace("-", " ")
+        location = Location.objects(name__icontains=query_name).first()
 
-    data = request.get_json()
-    busyness_level = data.get("busyness_level")
-
-    if busyness_level is None or not (1 <= busyness_level <= 10):
-        return jsonify({"error": "A 'busyness_level' between 1 and 10 is required"}), 400
-
-    current_hour_utc = datetime.utcnow().hour
-    old_rating = location.busyness_ratings[current_hour_utc]
-
-    if old_rating == -1:
-        # If there's no previous rating, use the new one directly.
-        new_rating = busyness_level
-    else:
-        new_rating = (busyness_level * 0.2) + (old_rating * 0.8)
-
-    # Update the rating for the current hour, rounded to the nearest integer.
-    location.busyness_ratings[current_hour_utc] = round(new_rating)
-    location.save()
-
-    return jsonify({"message": "Busyness report submitted successfully"}), 201
-
-# POST a new location
-@app.route('/admin/locations', methods=['POST'])
-@login_required
-def add_location():
-    data = request.get_json()
-    name = data.get("name")
-    busyness_ratings = data.get("busyness_ratings")
-
-    if not name or not busyness_ratings:
-        return jsonify({"error": "Missing name or busyness_ratings"}), 400
-
-    if len(busyness_ratings) != 24:
-        return jsonify({"error": "busyness_ratings must have exactly 24 integers"}), 400
-
-    if any(r < 1 or r > 10 for r in busyness_ratings):
-        return jsonify({"error": "Each rating must be between 1 and 10"}), 400
-
-    location = Location(name=name, busyness_ratings=busyness_ratings)
-    location.save()
-    return jsonify({"message": "Location added successfully", "id": str(location.id)}), 201
-
-# UPDATE a location’s busyness or name
-@app.route('/admin/locations/<location_id>', methods=['PUT'])
-@login_required
-def update_location(location_id):
-    data = request.get_json()
-    location = Location.objects(id=location_id).first()
     if not location:
         return jsonify({"error": "Location not found"}), 404
     
-    if "name" in data:
-        location.name = data["name"]
-    if "current_busyness" in data:
-        location.current_busyness = data["current_busyness"]
-    
-    location.save()
-    return jsonify({"message": "Location updated"}), 200
+    if hasattr(current_user, 'banned') and current_user.banned:
+        return jsonify({"error": "You are banned from submitting reports"}), 403
 
+    # Handle Specific Time
+    report_date = datetime.utcnow()
+    if timestamp_str:
+        try:
+            report_date = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+        except Exception as e:
+            print(f"Timestamp parse error, using now: {e}")
+            pass
 
-# DELETE a location
-@app.route('/admin/locations/<location_id>', methods=['DELETE'])
-@login_required
-def delete_location(location_id):
-    location = Location.objects(id=location_id).first()
-    if not location:
-        return jsonify({"error": "Location not found"}), 404
+    new_report = Report(
+        author=current_user._get_current_object(),
+        location=location,
+        busyness=score,
+        date_posted=report_date
+    )
+    new_report.save()
 
-    location.delete()
-    return jsonify({"message": "Location deleted successfully"}), 200
+    # Update Specific Hour on Graph
+    if hour_index is not None and isinstance(hour_index, int) and 0 <= hour_index <= 23:
+        try:
+            current_val = location.busyness[hour_index]
+            new_val = int(round((current_val + score) / 2))
+            new_val = max(1, min(10, new_val))
+            location.busyness[hour_index] = new_val
+            location.save()
+        except Exception as e:
+            print(f"Error updating location busyness array: {e}")
+
+    return jsonify({"message": "Report submitted!"}), 201
 
 
 if __name__ == "__main__":

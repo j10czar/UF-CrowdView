@@ -3,88 +3,34 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import LocationGraph from "./LocationGraph";
-import { DUMMY_HOURLY_TEMPLATE } from "@/lib/busyness";
+import axios from "axios";
 
-const HOURS_IN_DAY = 24;
-const FALLBACK_BUSYNESS = 5;
-function getCurrentUtcHourIndex(seriesLength) {
-  if (!Number.isFinite(seriesLength) || seriesLength <= 0) {
-    return null;
-  }
-
-  const utcHour = new Date().getUTCHours();
- 
-  if (!Number.isFinite(utcHour)) {
-    return null;
-  }
-
-  const normalizedLength = Math.max(1, Math.floor(seriesLength));
-  const normalizedHour = ((Math.floor(utcHour) % normalizedLength) + normalizedLength) % normalizedLength;
-
-  return normalizedHour;
-}
-
-function generateFallbackSeries(baseScore = FALLBACK_BUSYNESS) {
-  // Take the seed score from the card props and fan it out across the 24-hour template so the graph has something realistic-ish to render before live data arrives.
-  const delta = (baseScore ?? FALLBACK_BUSYNESS) - FALLBACK_BUSYNESS;
-
-  return DUMMY_HOURLY_TEMPLATE.map((value) => {
-    const adjusted = Math.round(value + delta);
-    return Math.min(10, Math.max(1, adjusted));
-  });
-}
-
-export default function LocationCard({
-  locationId,
-  name,
-  imageSrc,
-  initialBusyness = null,
-}) {
-  const fallbackSeries = useMemo(
-    () => generateFallbackSeries(initialBusyness ?? FALLBACK_BUSYNESS),
-    [initialBusyness],
-  );
-
-  const fallbackCurrentHourIndex = useMemo(
-    () => getCurrentUtcHourIndex(fallbackSeries.length),
-    [fallbackSeries.length],
-  );
-
-  const [hourlyBusyness, setHourlyBusyness] = useState(fallbackSeries);
-  const [currentHourIndex, setCurrentHourIndex] = useState(
-    fallbackCurrentHourIndex,
-  );
+export default function LocationCard({ locationId, name, imageSrc, refreshTrigger }) {
+  
+  const [hourlyBusyness, setHourlyBusyness] = useState(Array(24).fill(0));
+  const [loading, setLoading] = useState(true);
+  
+  const currentHourIndex = new Date().getHours();
 
   useEffect(() => {
-    setHourlyBusyness(fallbackSeries);
-    setCurrentHourIndex(fallbackCurrentHourIndex);
-  }, [fallbackCurrentHourIndex, fallbackSeries, locationId]);
-
-  useEffect(() => {
-    if (!locationId) {
-      return;
-    }
+    if (!locationId) return;
 
     let isMounted = true;
 
     async function fetchBusyness() {
-      try {
-        // TODO: replace with real API call once endpoint is ready.
-        // const response = await fetch(`/api/locations/${locationId}/busyness`);
-        // const { hourlyBusyness: series } = await response.json();
-        const series = fallbackSeries;
-        const resolvedCurrentHourIndex = getCurrentUtcHourIndex(series.length);
 
-        if (isMounted) {
-          setHourlyBusyness(series);
-          setCurrentHourIndex(resolvedCurrentHourIndex);
+      try {
+        const response = await axios.get(
+          `http://localhost:5000/locations/${locationId}`,
+          { withCredentials: true }
+        );
+
+        if (isMounted && response.data && response.data.busyness) {
+          setHourlyBusyness(response.data.busyness);
+          setLoading(false);
         }
       } catch (error) {
-        if (isMounted) {
-          setHourlyBusyness(Array(HOURS_IN_DAY).fill(-1));
-          setCurrentHourIndex(null);
-        }
-        console.error("Failed to load busyness data", error);
+        console.error("Failed to load busyness data for", name, error);
       }
     }
 
@@ -93,27 +39,16 @@ export default function LocationCard({
     return () => {
       isMounted = false;
     };
-  }, [fallbackSeries, locationId]);
+  // Added refreshTrigger here. Whenever this number changes the fetch runs again.
+  }, [locationId, name, refreshTrigger]); 
 
   const latestBusyness = useMemo(() => {
-    if (
-      !Array.isArray(hourlyBusyness) ||
-      typeof currentHourIndex !== "number"
-    ) {
-      return null;
-    }
-
-    const safeIndex = Math.max(
-      0,
-      Math.min(hourlyBusyness.length - 1, Math.floor(currentHourIndex)),
-    );
-    const value = hourlyBusyness[safeIndex];
-
-    return typeof value === "number" && value !== -1 ? value : null;
-  }, [hourlyBusyness, currentHourIndex]);
+    if (loading) return null;
+    return hourlyBusyness[currentHourIndex];
+  }, [hourlyBusyness, currentHourIndex, loading]);
 
   return (
-    <div className="w-72 overflow-hidden rounded-3xl border border-white/10 bg-white/5 text-slate-50 shadow-2xl backdrop-blur">
+    <div className="w-72 overflow-hidden rounded-2xl bg-white shadow-lg transition-transform hover:scale-105">
       <div className="relative h-40 w-full">
         <Image
           src={imageSrc}
@@ -123,33 +58,40 @@ export default function LocationCard({
           className="object-cover"
           priority
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
+        {!loading && latestBusyness > 7 && (
+           <div className="absolute top-2 right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md animate-pulse">
+             BUSY
+           </div>
+        )}
       </div>
+      
       <div className="flex flex-col gap-3 p-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">{name}</h3>
-          <span className="text-sm font-medium text-slate-200">
-            {latestBusyness !== null
-              ? `Busyness: ${latestBusyness}/10`
-              : "Loading..."}
+          <h3 className="text-lg font-semibold text-gray-900">{name}</h3>
+          <span className={`text-sm font-medium ${loading ? "text-gray-400" : "text-blue-600"}`}>
+            {loading ? "Loading..." : `Busyness: ${latestBusyness}/10`}
           </span>
         </div>
-        <LocationGraph
-          hourlyBusyness={hourlyBusyness}
-          currentHourIndex={currentHourIndex}
-        />
-        <div className="flex items-center justify-center gap-4 text-xs text-slate-300">
-          <span className="flex items-center gap-1">
-            <span className="inline-block size-2 rounded-full bg-blue-400" />
-            Past hours
-          </span>
+        
+        <div className={loading ? "opacity-50 blur-sm transition-all duration-500" : "opacity-100 transition-all duration-500"}>
+            <LocationGraph
+            hourlyBusyness={hourlyBusyness}
+            currentHourIndex={currentHourIndex}
+            />
+        </div>
+
+        <div className="flex items-center justify-center gap-4 text-xs text-gray-500">
           <span className="flex items-center gap-1">
             <span className="inline-block size-2 rounded-full bg-blue-500" />
-            Current hour
+            Past
           </span>
           <span className="flex items-center gap-1">
-            <span className="inline-block size-2 rounded-full bg-slate-400" />
-            Upcoming hours
+            <span className="inline-block size-2 rounded-full bg-blue-600" />
+            Now
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block size-2 rounded-full bg-gray-400" />
+            Future
           </span>
         </div>
       </div>
