@@ -8,7 +8,6 @@ import os
 from datetime import datetime, timedelta
 from bson.objectid import ObjectId
 from dotenv import load_dotenv
-import dateutil.parser 
 
 app = Flask(__name__)
 
