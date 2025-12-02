@@ -8,16 +8,24 @@ import { Switch } from "@/components/ui/switch";
 import axios from "axios";
 
 // --- HELPER FUNCTIONS ---
-function formatHourLabel(hour) {
-  if (!Number.isInteger(hour)) return "—";
-  const date = new Date();
-  date.setHours(hour, 0, 0, 0);
-  return new Intl.DateTimeFormat(undefined, { hour: "numeric" }).format(date);
+
+function formatTimeLabel(dateString) {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "—";
+  date.setHours(date.getHours() - 5);
+  
+  return new Intl.DateTimeFormat(undefined, { 
+    hour: "numeric", 
+    minute: "2-digit" 
+  }).format(date);
 }
 
 function formatDateLabel(dateString) {
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) return "Unknown date";
+
+  date.setHours(date.getHours() - 5);
+
   return new Intl.DateTimeFormat(undefined, {
     month: "short",
     day: "numeric",
@@ -26,7 +34,6 @@ function formatDateLabel(dateString) {
 
 export default function AdminPage() {
   const router = useRouter();
-  
   
   const [currentUser, setCurrentUser] = useState(null);
   const [users, setUsers] = useState([]); 
@@ -321,7 +328,8 @@ export default function AdminPage() {
                         >
                           <div className="space-y-1">
                             <p className="text-sm font-semibold text-white">
-                              {report.authorName} • {formatHourLabel(report.hour)}
+                              {/* Using formatTimeLabel which now does the -5h shift */}
+                              {report.authorName} • {formatTimeLabel(report.datePosted)}
                             </p>
                             <p className="text-xs text-slate-300">
                               {formatDateLabel(report.datePosted)} — Score: {report.busyness}/10
